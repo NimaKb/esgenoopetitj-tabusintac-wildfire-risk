@@ -43,7 +43,7 @@ Fire Exposure and Directional Vulnerability is a published and reliable way to e
 1. [A simple metric of landscape fire exposure](https://doi.org/10.1007/s10980-020-01173-8)  
 2. [Assessing directional vulnerability to wildfire](https://doi.org/10.1007/s11069-023-05885-3)  
 3. [Optimizing fuel treatments for community wildfire mitigation planning](https://doi.org/10.1016/j.jenvman.2024.122325)
-
+If you have any questions regarding the steps taken to generate the outcomes, please contact the author of this repository with email as nkarimi@forsite.ca
 ---
 
 ## 1. Fire Exposure Analysis

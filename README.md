@@ -2,222 +2,135 @@
 
 This repository contains the core scripts and methodology used to support the wildfire risk assessment for the communities of Esgenoôpetitj and Tabusintac. The assessment combines fuel hazard data, building exposure proximity, and fire weather parameters to identify priority areas for mitigation, viable ember pathways, and community-specific fire vulnerability.
 
----
+## Overview and Definitions
 
-## 🔧 Structure and Definitions
-
-This repository is organized by analysis components:
+This project comprises three main components:
 
 ### 1. Fire Exposure and Directional Vulnerability
 
-- **Fire Exposure (FE)**: Quantifies the density and proximity of hazardous fuels surrounding a point, using a continuous raster (0–1) based on ember transmission likelihood.
-- **Directional Vulnerability**: Uses radial transects from a community centroid to identify directions with continuous high fire exposure. These directions are considered “viable” wildfire pathways based on landscape orientation and fuel layout.
+**Fire Exposure (FE)** refers to the relative concentration of hazardous fuels in the surrounding landscape, calculated as a continuous raster from 0 to 1. The metric reflects the likelihood of ember transmission toward a location, based on fuel type and distance.
+
+**Directional Vulnerability** identifies the most viable directions from which a wildfire may reach a community or point of interest. It uses radial transects to determine directional pathways through continuous high-exposure areas.
 
 ### 2. Building Exposure Load (BEL)
 
-- **BEL** measures the number of built structures (e.g., residential or critical infrastructure footprints) located within 500 meters of each hazardous fuel unit.
-- Higher BEL values reflect a greater risk posed by that fuel patch to the community.
+**Building Exposure Load** quantifies the number of structure footprints located within a fixed buffer (500 meters) of each hazardous fuel patch. Higher BEL values indicate a greater potential impact area, useful for ranking treatment priorities.
 
 ### 3. Fire Weather and Windrose Analysis
 
-- Uses a 10-year record of NRCAN raster data for wind speed (WS), wind direction (WD), Fire Weather Index (FWI), and Initial Spread Index (ISI).
-- Visualized via seasonal windrose plots to show dominant directions and intensity during fire seasons.
+This component examines long-term fire weather patterns, including wind direction, wind speed, Fire Weather Index (FWI), and Initial Spread Index (ISI), based on daily raster datasets. Seasonal summaries are visualized through windrose diagrams to assess alignment between weather trends and directional fire threat.
 
----
+## Technical Workflow
 
-## 🔁 Analysis Components
-
-The technical workflow documented here is aligned with the analysis presented in the report titled:
-
-> "Fire Exposure, Directional Vulnerability, and Building Exposure Load for Wildland-Urban Interface Communities"
-
-The methodology builds upon the **fireexposuR** package with custom extensions and includes three main components:
-
-- **Fire Exposure and Directional Vulnerability**
-- **Building Exposure Load (BEL)**
-- **Seasonal Fire Weather and Windrose Analysis**
-
-To better understand the fire exposure and directional analysis methods, see:
-
-1. A simple metric of landscape fire exposure: https://doi.org/10.1007/s10980-020-01173-8  
-2. Assessing directional vulnerability to wildfire: https://doi.org/10.1007/s11069-023-05885-3  
-3. Optimizing fuel treatments for community wildfire mitigation planning: https://doi.org/10.1016/j.jenvman.2024.122325
+The technical workflow documented here follows the methodology outlined in the full analysis and includes the following sections.
 
 ---
 
 ## 1. Fire Exposure Analysis
 
-Fire Exposure (FE) was calculated using a continuous hazard raster representing the probability of ember transmission based on fuel type and distance. To extend this, a directional component was introduced using custom radial transects.
+Fire Exposure (FE) was calculated using a continuous hazard raster representing the probability of ember transmission based on fuel type and distance. A directional component was added to identify high-exposure corridors by applying radial transects.
 
 ### 1.1 `fire_exp_dir_custom.R` – Custom Directional Exposure Function
 
-This function extends the base **fireexposuR** model (details: https://github.com/ropensci/fireexposuR) by calculating 360° radial transects from a point or polygon (e.g., community centroid), dividing them into four segments, and identifying which directions are viable pathways for fire transmission.
+This function extends the base `fireexposuR` package (https://github.com/ropensci/fireexposuR) by computing directional vulnerability from any given location. It operates as follows:
 
-**Key Features:**
+- Generates 360° radial transects from a point or polygon
+- Divides each transect into four segments
+- Evaluates viability if at least 80% of a transect overlaps areas with fire exposure ≥ 0.6
 
-- User-defined angular interval (e.g., 1° = 360 directions)
-- Classifies each segment as viable if ≥80% of its length overlaps with areas of high fire exposure (FE ≥ 0.6)
-- Returns a spatial line feature with direction and viability attributes
+The function returns spatial line features indicating direction and exposure classification. It is designed for use in directional vulnerability assessments where fuel arrangement and ember travel routes are of interest.
 
-This function supports **directional vulnerability analysis**, which is useful in identifying community-facing threats based purely on fuel arrangement.
+### 1.2 `FireExposure_BurntChurch.R` – Execution Script
 
-### 1.2 `FireExposure_BurntChurch.R` – Fire Exposure Execution Script
+This script applies the fire exposure and directional vulnerability analysis by:
 
-This script executes the complete fire exposure analysis:
+- Loading the hazard raster and community point shapefile
+- Verifying spatial alignment and transforming coordinate systems if needed
+- Calling the `fire_exp()` function from the `fireexposuR` package
+- Sourcing the custom directional function
+- Generating and exporting individual shapefiles of viable fire pathways
+- Exporting the full fire exposure raster
 
-- Loads the hazard raster and community point shapefile
-- Ensures spatial alignment via CRS checking
-- Runs `fire_exp()` from the **fireexposuR** package
-- Sources the custom function (`fire_exp_dir_custom.R`)
-- Iteratively computes and exports directional viability shapefiles for each community point
-- Saves the full fire exposure raster and generates plots
-
-**Output:**
-
-- `fire_exposure.tif`: Raster showing FE values from 0 to 1  
-- `dir_exposure_point_X.shp`: Shapefiles showing viable fire approach directions
+**Outputs:**
+- `fire_exposure.tif`: Continuous raster of fire exposure values
+- `dir_exposure_point_X.shp`: Directional shapefiles for each community point
 
 ---
 
 ## 2. Building Exposure Load (BEL) Calculation
 
-**Building Exposure Load (BEL)** quantifies the number of building footprints (FireSmart-classified VARs) located within a 500-meter radius of each hazardous fuel unit. This metric helps assess how “offensive” each fuel unit is, in terms of proximity to built assets.
+Building Exposure Load measures the number of structure footprints located within a 500-meter buffer of each hazardous fuel patch. This information is critical in assessing the relative importance of fuel units for mitigation.
 
 ### 2.1 `BEL_Calculation.R` – Spatial Buffer Analysis
 
-This script performs the following:
+The script performs the following tasks:
 
-- Loads:
-  - Hexagon shapefile representing hazardous fuel patches
-  - Building footprints for Esgenoôpetitj and Tabusintac
-- Reprojects all layers to EPSG:3347 (meters) for accurate distance calculation
-- For each hexagon:
-  - Computes centroid
-  - Counts building points within 500 meters
-  - Assigns count to the BEL field
-- Exports an updated shapefile with BEL values
+- Loads a hexagon shapefile representing hazardous fuel units
+- Loads building footprint data for Esgenoôpetitj and Tabusintac
+- Reprojects all layers to EPSG:3347 for accurate distance measurement
+- Calculates the number of building points within 500 meters of each hexagon centroid
+- Assigns the count to a new `BEL` field
+- Saves the updated shapefile with the new attribute
 
-**Output:**  
-`Hazard_Fuel_Units_proj.shp`: Hexagon layer with a new field `BEL` indicating the number of nearby structures
+**Output:**
+- `Hazard_Fuel_Units_proj.shp`: Updated fuel unit layer with BEL values per hexagon
 
 ---
 
-## 3.1 `Weather_value_generation_for_point_NRCAN.R` – Weather Data Extraction
+## 3. Fire Weather and Windrose Analysis
 
-This script extracts daily values for WS, WD, ISI, and FWI from raster datasets (GeoTIFFs) hosted locally by variable and year. The script loops through multiple years (2014–2024) and compiles a long-term, point-based weather record for the selected community.
+This analysis is composed of three scripts that extract, clean, and visualize daily fire weather data spanning 2014 to 2024.
 
-🔁 **Workflow:**
+### 3.1 `Weather_value_generation_for_point_NRCAN.R` – Data Extraction
 
-- **Configuration:**
-  - Defines paths to NRCAN raster folders (organized by variable and year)
-  - Specifies the point location shapefile for extraction (`Weather.Point.shp`)
-  - Lists target variables (`ws`, `wd`, `isi`, `fwi`) and years (2014–2024)
+This script extracts wind speed (WS), wind direction (WD), ISI, and FWI from raster files for a specified location. It:
 
-- **Point Extraction:**
-  - Reprojects the point if necessary to match the raster CRS (EPSG:3978)
-  - Iteratively extracts raster values for each day and variable
-  - Handles missing data and invalid values
+- Defines paths to NRCAN raster folders by variable and year
+- Loads a shapefile point for extraction
+- Reprojects the point to match raster CRS (EPSG:3978)
+- Extracts raster values for each day and variable
+- Joins extracted tables into a unified dataset
+- Adds date-based Year and Season fields
 
-- **Compilation:**
-  - Joins all four variable tables (WS, WD, ISI, FWI) by date
-  - Adds Year and Season fields based on date formatting:
-    - Spring: April 1 – June 14
-    - Summer/Fall: June 15 – November 1
+**Output:**
+- `Weather_WS_WD_ISI_FWI_2014_2024.xlsx`: Multi-year Excel file with daily weather variables
 
-**Output:**  
-Final compiled dataset is saved as an Excel file:  
-`Weather_WS_WD_ISI_FWI_2014_2024.xlsx`
+### 3.2 `Weather_value_generation_for_point_NRCAN_cleaning.R` – Data Cleaning
 
-📥 Inputs:  
-- Folder structure with GeoTIFF files named by variable and date (e.g., `ws20140515.tif`)  
-- Shapefile with point location of the weather extraction site
+This script prepares the dataset for seasonal visualization by removing incomplete records. It:
 
-📤 Output:  
-- `Weather_WS_WD_ISI_FWI_2014_2024.xlsx`: Multi-year dataset with daily values, ready for visualization and analysis
+- Loads the Excel output from Section 3.1
+- Removes rows with missing WS, WD, ISI, FWI, or Season values
+- Saves the cleaned version for analysis
 
-🔎 **Purpose:**  
-This script prepares the foundation for understanding seasonal fire weather patterns that influence fire behavior and direction. The results inform:
-- Seasonal windrose analysis
-- Correlation between directional vulnerability and dominant wind/fire behavior
-- Justification for pre-suppression planning and fuel treatment orientation
+**Output:**
+- `Weather_WS_WD_ISI_FWI_2014_2024_COMPLETE.csv`: Cleaned CSV file ready for plotting
 
----
+### 3.3 `Windrose_generation_weather_data.R` – Windrose Visualization
 
-## 3.2 `Weather_value_generation_for_point_NRCAN_cleaning.R` – Cleaning and Filtering Weather Data
+This script visualizes the cleaned dataset through windrose plots that show frequency and intensity of fire-related weather by direction. It:
 
-This script refines the multi-year fire weather dataset by removing incomplete or invalid records prior to seasonal analysis and visualization. It ensures that only days with valid values for all four key variables — WS, WD, ISI, and FWI — are included in downstream analysis.
+- Loads the cleaned CSV
+- Prepares two datasets: one for FWI and one for ISI
+- Defines classification breaks and color schemes
+- Generates windroses for Spring and Summer/Fall periods
+- Saves each plot as a PNG image
 
-🔄 **Workflow Summary:**
+**Outputs:**
+- `windrose_spring_fwi.png`
+- `windrose_spring_isi.png`
+- `windrose_summer_fall_fwi.png`
+- `windrose_summer_fall_isi.png`
 
-- **Load Excel file:**  
-  Reads the raw, multi-variable Excel output (`Weather_WS_WD_ISI_FWI_2014_2024.xlsx`) generated from the previous extraction script
-
-- **Apply Quality Filters:**  
-  Removes rows with missing values for:
-  - Wind Speed (WS)
-  - Wind Direction (WD)
-  - Initial Spread Index (ISI)
-  - Fire Weather Index (FWI)
-  - Season classification
-
-- **Export Cleaned Dataset:**  
-  Saves the filtered dataset as a `.csv` file ready for plotting and statistical analysis:
-  `Weather_WS_WD_ISI_FWI_2014_2024_COMPLETE.csv`
-
-📥 Input:  
-`Weather_WS_WD_ISI_FWI_2014_2024.xlsx`: Unfiltered Excel file containing extracted weather variables
-
-📤 Output:  
-`Weather_WS_WD_ISI_FWI_2014_2024_COMPLETE.csv`: Filtered CSV file with complete records only
-
-🔎 **Purpose:**  
-This cleaning step ensures the accuracy and consistency of the dataset used in windrose generation. Since windrose plots rely on complete daily records of wind speed and direction, this filtering step is essential to avoid misleading visualizations or statistical bias.
+These plots help align dominant fire weather directions with mapped directional vulnerabilities and inform planning for fuel treatment and suppression resources.
 
 ---
 
-## 3.3 `Windrose_generation_weather_data.R` – Seasonal Windrose Visualization
+## Repository Contents
 
-This script generates seasonal windrose plots based on Fire Weather Index (FWI) and Initial Spread Index (ISI), using wind direction (WD) as the angular input. The script builds upon the cleaned CSV file generated in Section 3.2 and visualizes seasonal directional fire weather behavior.
+All code scripts are located in the `/scripts` directory. Each file corresponds to one step in the analysis process, and filenames are referenced in the sections above.
 
-🌀 **Workflow Summary:**
+Supplementary files, such as figures and shapefiles, are not stored in this repository due to size constraints but are referenced by path in each script.
 
-- **Load Cleaned Weather Data:**  
-  Reads `Weather_WS_WD_ISI_FWI_2014_2024_COMPLETE.csv` into R using `readr::read_csv`
-
-- **Prepare Data for Visualization:**  
-  Creates two windrose-compatible data frames:
-  - `df_fwi` (FWI as wind speed)
-  - `df_isi` (ISI as wind speed)
-
-- **Define Binning Thresholds and Color Scheme:**
-  - FWI: 0–5, 5–10, 10–19, 19–30, 30+
-  - ISI: 0–2, 2–4, 4–8, 8–15, 15+
-  - Uses `"YlOrRd"` palette
-
-- **Generate Windrose Plots:**
-  Produces four seasonal plots:
-  - Spring FWI
-  - Spring ISI
-  - Summer/Fall FWI
-  - Summer/Fall ISI
-  - Uses `openair::windRose()` for polar plots
-
-- **Export to PNG:**
-  Saves each windrose plot as an image file:
-  - `windrose_spring_fwi.png`
-  - `windrose_spring_isi.png`
-  - `windrose_summer_fall_fwi.png`
-  - `windrose_summer_fall_isi.png`
-
-📥 Input:  
-`Weather_WS_WD_ISI_FWI_2014_2024_COMPLETE.csv`: Cleaned fire weather records (daily resolution)
-
-📤 Output:  
-PNG image files for each seasonal windrose
-
-🔎 **Purpose:**
-These visualizations allow planners and analysts to:
-- Understand dominant wind directions during fire seasons
-- Align observed wind behavior with directional vulnerability maps
-- Justify fuel treatment orientation, suppression resource prepositioning, and community-specific risk communication
+This repository serves as a transparent, reproducible codebase for the wildfire exposure analysis conducted for the communities of Esgenoôpetitj and Tabusintac.
 
